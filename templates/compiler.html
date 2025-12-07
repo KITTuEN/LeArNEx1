@@ -42,12 +42,19 @@
 <div class="container-fluid py-4">
     <div class="row">
         <!-- Questions Sidebar -->
-        <div class="col-md-3">
+        <div class="col-md-3" id="sidebar-col">
             <div class="card h-100 border-0 shadow-sm">
                 <div class="card-header bg-transparent border-bottom">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h5 class="mb-0">Questions</h5>
-                        <button class="btn btn-sm btn-outline-primary" onclick="generateQuestions()">
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="toggleSidebar()"
+                                title="Hide Questions">
+                                <i class="bi bi-list"></i>
+                            </button>
+                            <h5 class="mb-0">Questions</h5>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="generateQuestions()"
+                            title="Generate New">
                             <i class="bi bi-magic"></i> New
                         </button>
                     </div>
@@ -64,10 +71,16 @@
         </div>
 
         <!-- Problem Description Column -->
-        <div class="col-md-4">
+        <div class="col-md-4" id="problem-col">
             <div class="card h-100 border-0 shadow-sm">
-                <div class="card-header bg-transparent border-bottom">
-                    <h5 class="mb-0" id="problem-title">Select a Question</h5>
+                <div class="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" id="show-sidebar-btn" onclick="toggleSidebar()"
+                            style="display: none;" title="Show Questions">
+                            <i class="bi bi-list"></i>
+                        </button>
+                        <h5 class="mb-0" id="problem-title">Select a Question</h5>
+                    </div>
                     <span class="badge bg-secondary" id="problem-difficulty"></span>
                 </div>
                 <div class="card-body overflow-auto" style="max-height: 600px;" id="problem-description">
@@ -77,7 +90,7 @@
         </div>
 
         <!-- Code Editor Column -->
-        <div class="col-md-5">
+        <div class="col-md-5" id="editor-col">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Code Editor</h5>
@@ -464,6 +477,44 @@
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Submit';
             });
+    }
+
+    function toggleSidebar() {
+        const sidebarCol = document.getElementById('sidebar-col');
+        const problemCol = document.getElementById('problem-col');
+        const editorCol = document.getElementById('editor-col');
+        const showBtn = document.getElementById('show-sidebar-btn');
+
+        if (sidebarCol.style.display === 'none') {
+            // Show Sidebar
+            sidebarCol.style.display = 'block';
+
+            // Reset widths
+            problemCol.classList.remove('col-md-5');
+            problemCol.classList.add('col-md-4');
+
+            editorCol.classList.remove('col-md-7');
+            editorCol.classList.add('col-md-5');
+
+            showBtn.style.display = 'none';
+        } else {
+            // Hide Sidebar
+            sidebarCol.style.display = 'none';
+
+            // Expand other columns
+            problemCol.classList.remove('col-md-4');
+            problemCol.classList.add('col-md-5');
+
+            editorCol.classList.remove('col-md-5');
+            editorCol.classList.add('col-md-7');
+
+            showBtn.style.display = 'block';
+        }
+
+        // Refresh editor layout
+        if (editor) {
+            setTimeout(() => editor.layout(), 50);
+        }
     }
 </script>
 {% endblock %}
