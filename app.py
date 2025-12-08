@@ -464,6 +464,7 @@ def get_video_metadata(video_id, yt_url):
     """Get video metadata (title, description) as fallback when transcript is not available."""
     metadata = None
     error_log = []
+    print(f"get_video_metadata called for {video_id}")
     
     # Method 1: Try requests + BeautifulSoup first (more reliable, doesn't have API issues)
     if REQUESTS_AVAILABLE:
@@ -1911,12 +1912,15 @@ def _api_videoquiz_logic():
         # Fallthrough to metadata fallback
         if "No transcripts were found" in error_msg or "TranscriptsDisabled" in error_msg or "Could not retrieve a transcript" in error_msg:
             # Fallback to video metadata
+            print("Falling back to video metadata...")
             metadata, error_log = get_video_metadata(video_id, yt_url)
             if metadata and metadata.get("description"):
                 # Use description and title as content
                 transcript = f"Video Title: {metadata.get('title', '')}\n\nVideo Description:\n{metadata.get('description', '')}"
                 content_source = "metadata"
+                print("Metadata fallback successful.")
             else:
+                print("Metadata fallback failed.")
                 if not YT_DLP_AVAILABLE and not PYTUBE_AVAILABLE:
                     return jsonify({
                         "error": "No transcript/captions found for this video. To use videos without subtitles, please install yt-dlp or pytube."
@@ -1947,10 +1951,10 @@ def _api_videoquiz_logic():
                     return jsonify({
                         "error": f"Error processing video: {error_msg}<br>Unable to retrieve transcript or video metadata. Please ensure the video is public, not age-restricted, and accessible. You can try a different video or check if the video has captions enabled."
                     }), 500
-    
     # Final check - if we still don't have content
     if not transcript or transcript.strip() == "":
-        metadata = get_video_metadata(video_id, yt_url)
+        print("Transcript still empty, trying metadata again...")
+        metadata, error_log = get_video_metadata(video_id, yt_url)
         if metadata and (metadata.get("description") or metadata.get("title")):
             title = metadata.get('title', 'Video')
             description = metadata.get('description', '')
@@ -1962,8 +1966,10 @@ def _api_videoquiz_logic():
             }), 404
 
     # Check if the video is educational
+    print("Checking if content is educational...")
     is_educational, reason = is_educational_content(transcript)
     if not is_educational:
+        print(f"Video rejected: {reason}")
         return jsonify({
             "error": f"This video does not appear to be educational content. {reason}<br><br>Please use educational videos such as tutorials, courses, lectures, how-to guides, documentaries, or academic content."
         }), 400
