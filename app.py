@@ -345,24 +345,37 @@ def _send_otp_email_thread(recipient_email, otp, purpose="signup"):
         msg.attach(MIMEText(body, 'html'))
         text = msg.as_string()
         
-        # Brevo uses port 587 with STARTTLS
-        try:
-            logging.info(f"Connecting to SMTP server {SMTP_SERVER}:{SMTP_PORT}")
-            print(f"Attempting to send email via STARTTLS (Port 587)...")
-            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
-            server.set_debuglevel(1) # Enable SMTP debug
-            server.starttls()
-            server.login(SMTP_USERNAME, EMAIL_PASSWORD)
-            # The 'From' address in the envelope must match the authenticated user or be a verified sender
-            server.sendmail(EMAIL_ADDRESS, recipient_email, text)
-            server.quit()
-            print(f"Email sent successfully to {recipient_email} via Port 587")
-            logging.info(f"Email sent successfully to {recipient_email}")
-            return True
-        except Exception as e:
-            print(f"Failed to send email: {str(e)}")
-            logging.error(f"Failed to send email: {str(e)}")
-            return False
+        # Brevo uses port 587 with STARTTLS, but sometimes 2525 works better in cloud envs
+        ports_to_try = [SMTP_PORT, 2525]
+        
+        for port in ports_to_try:
+            try:
+                logging.info(f"Connecting to SMTP server {SMTP_SERVER}:{port}")
+                print(f"Attempting to send email via STARTTLS (Port {port})...")
+                
+                server = smtplib.SMTP(SMTP_SERVER, port, timeout=20)
+                server.set_debuglevel(1) 
+                print(f"Connected to {SMTP_SERVER}:{port}")
+                
+                server.starttls()
+                print("TLS started")
+                
+                server.login(SMTP_USERNAME, EMAIL_PASSWORD)
+                print("Logged in successfully")
+                
+                server.sendmail(EMAIL_ADDRESS, recipient_email, text)
+                server.quit()
+                
+                print(f"Email sent successfully to {recipient_email} via Port {port}")
+                logging.info(f"Email sent successfully to {recipient_email} via Port {port}")
+                return True
+            except Exception as e:
+                print(f"Failed to send email on port {port}: {str(e)}")
+                logging.error(f"Failed to send email on port {port}: {str(e)}")
+                # Continue to next port if available
+                continue
+        
+        return False
     except Exception as e:
         print(f"Error preparing email: {str(e)}")
         logging.error(f"Error preparing email: {str(e)}")
