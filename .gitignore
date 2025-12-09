@@ -1,3 +1,5 @@
 .env
 __pycache__/
 *.pyc
+otp_debug.log
+debug_email.py

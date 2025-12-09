@@ -24,6 +24,14 @@ import certifi
 import tempfile
 import threading
 import socket
+import logging
+
+# Configure logging
+logging.basicConfig(
+    filename='otp_debug.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Try to import reportlab for PDF generation
 try:
@@ -288,6 +296,7 @@ def generate_otp(length=6):
 def _send_otp_email_thread(recipient_email, otp, purpose="signup"):
     """Internal function to send OTP email (runs in thread)."""
     try:
+        logging.info(f"Starting email send to {recipient_email} for {purpose}")
         msg = MIMEMultipart()
         msg['From'] = EMAIL_ADDRESS
         msg['To'] = recipient_email
@@ -336,34 +345,38 @@ def _send_otp_email_thread(recipient_email, otp, purpose="signup"):
         msg.attach(MIMEText(body, 'html'))
         text = msg.as_string()
         
-        msg.attach(MIMEText(body, 'html'))
-        text = msg.as_string()
-        
         # Brevo uses port 587 with STARTTLS
         try:
+            logging.info(f"Connecting to SMTP server {SMTP_SERVER}:{SMTP_PORT}")
             print(f"Attempting to send email via STARTTLS (Port 587)...")
             server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
+            server.set_debuglevel(1) # Enable SMTP debug
             server.starttls()
             server.login(SMTP_USERNAME, EMAIL_PASSWORD)
             # The 'From' address in the envelope must match the authenticated user or be a verified sender
             server.sendmail(EMAIL_ADDRESS, recipient_email, text)
             server.quit()
             print(f"Email sent successfully to {recipient_email} via Port 587")
+            logging.info(f"Email sent successfully to {recipient_email}")
             return True
         except Exception as e:
             print(f"Failed to send email: {str(e)}")
+            logging.error(f"Failed to send email: {str(e)}")
             return False
     except Exception as e:
         print(f"Error preparing email: {str(e)}")
+        logging.error(f"Error preparing email: {str(e)}")
         return False
 
 def send_otp_email(recipient_email, otp, purpose="signup"):
     """Send OTP email asynchronously to prevent blocking."""
     # Start email sending in a background thread
+    logging.info(f"Queueing email to {recipient_email}")
     thread = threading.Thread(target=_send_otp_email_thread, args=(recipient_email, otp, purpose))
     thread.daemon = True  # Daemon thread will shut down when main program exits
     thread.start()
     return True  # Always return True immediately to avoid blocking
+
 
 def generate_quiz_code(length=6):
     """Generate a unique alphanumeric quiz code."""
@@ -3110,9 +3123,12 @@ def api_aptitude_attempts():
 @app.route("/test-email")
 def test_email():
     """Debug route to test email sending synchronously with network diagnostics."""
-    recipient_email = "kittech6@gmail.com"  # Sending to self for testing
-    if current_user.is_authenticated:
-        recipient_email = current_user.email
+    recipient_email = request.args.get("email")
+    if not recipient_email:
+        if current_user.is_authenticated:
+            recipient_email = current_user.email
+        else:
+            return "Please provide email parameter: /test-email?email=your@email.com"
     
     diagnostics = {}
     
