@@ -28,16 +28,10 @@ import logging
 
 # Configure logging
 # Configure logging
-handlers = [logging.StreamHandler()]
-try:
-    handlers.append(logging.FileHandler('otp_debug.log'))
-except OSError:
-    pass  # Read-only file system (e.g., Vercel)
-
 logging.basicConfig(
+    filename='otp_debug.log',
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=handlers
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
 # Try to import reportlab for PDF generation
@@ -83,7 +77,7 @@ EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp-relay.brevo.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 # MongoDB connection
-MONGODB_URI = os.environ.get("MONGODB_URI")
+MONGODB_URI = "mongodb+srv://harikothapalli61_db_user:Kothapalli555@cluster0.5nukjmu.mongodb.net/"
 DB_NAME = os.environ.get("DB_NAME", "videoquiz_db")
 try:
     if not MONGODB_URI:
@@ -141,7 +135,7 @@ def load_user(user_id):
 
 # Gemini API config
 # Gemini API config
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCeY99Oeu2B_jYCgpp24Y5Z0LsrlTBrqKY")
 GEMINI_API_KEYS = os.environ.get("GEMINI_API_KEYS")
 
 def get_gemini_model():
@@ -389,11 +383,13 @@ def _send_otp_email_thread(recipient_email, otp, purpose="signup"):
         return False
 
 def send_otp_email(recipient_email, otp, purpose="signup"):
-    """Send OTP email synchronously (required for Vercel/Serverless)."""
-    # In serverless environments like Vercel, background threads are killed
-    # when the main request finishes. We must send synchronously.
+    """Send OTP email asynchronously to prevent blocking."""
+    # Start email sending in a background thread
     logging.info(f"Queueing email to {recipient_email}")
-    return _send_otp_email_thread(recipient_email, otp, purpose)
+    thread = threading.Thread(target=_send_otp_email_thread, args=(recipient_email, otp, purpose))
+    thread.daemon = True  # Daemon thread will shut down when main program exits
+    thread.start()
+    return True  # Always return True immediately to avoid blocking
 
 
 def generate_quiz_code(length=6):
@@ -1035,12 +1031,10 @@ def signup():
         }
         
         # Send OTP
-        if send_otp_email(email, otp, purpose="signup"):
-            flash("OTP sent to your email. Please verify to complete signup.", "info")
-            return redirect(url_for('verify_signup'))
-        else:
-            flash("Failed to send OTP email. Please try again later.", "error")
-            return render_template("signup.html")
+        send_otp_email(email, otp, purpose="signup")
+        
+        flash("OTP sent to your email. Please verify to complete signup.", "info")
+        return redirect(url_for('verify_signup'))
     
     return render_template("signup.html")
 
@@ -1200,12 +1194,10 @@ def forgot_password():
         }
         
         # Send OTP
-        if send_otp_email(email, otp, purpose="reset"):
-            flash("OTP sent to your email. Please verify to reset password.", "info")
-            return redirect(url_for('verify_reset_otp'))
-        else:
-            flash("Failed to send OTP email. Please try again later.", "error")
-            return render_template("forgot_password.html")
+        send_otp_email(email, otp, purpose="reset")
+        
+        flash("OTP sent to your email. Please verify to reset password.", "info")
+        return redirect(url_for('verify_reset_otp'))
     
     return render_template("forgot_password.html")
 
