@@ -80,7 +80,7 @@ EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp-relay.brevo.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 # MongoDB connection
-MONGODB_URI = "mongodb+srv://harikothapalli61_db_user:Kothapalli555@cluster0.5nukjmu.mongodb.net/"
+MONGODB_URI = os.environ.get("MONGODB_URI")
 DB_NAME = os.environ.get("DB_NAME", "videoquiz_db")
 try:
     if not MONGODB_URI:
@@ -138,7 +138,7 @@ def load_user(user_id):
 
 # Gemini API config
 # Gemini API config
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCeY99Oeu2B_jYCgpp24Y5Z0LsrlTBrqKY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_API_KEYS = os.environ.get("GEMINI_API_KEYS")
 
 def get_gemini_model():
