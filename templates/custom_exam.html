@@ -183,9 +183,12 @@
 
         userAnswers[questionIndex] = optionIndex;
         allOptions.forEach((opt, idx) => {
-            opt.classList.remove('active', 'bg-primary', 'border-primary');
             if (idx === optionIndex) {
+                opt.classList.remove('bg-transparent', 'border-secondary');
                 opt.classList.add('active', 'bg-primary', 'border-primary');
+            } else {
+                opt.classList.add('bg-transparent', 'border-secondary');
+                opt.classList.remove('active', 'bg-primary', 'border-primary');
             }
         });
     }
@@ -197,7 +200,10 @@
             const options = qc.querySelectorAll('.option');
             options.forEach((opt, idx) => {
                 opt.disabled = true;
-                if (userAnswers[qIndex] === idx) opt.classList.add('active');
+                if (userAnswers[qIndex] === idx) {
+                    opt.classList.remove('bg-transparent');
+                    opt.classList.add('active', 'bg-primary');
+                }
             });
             new bootstrap.Collapse(document.getElementById('explanation-' + qIndex)).show();
         });

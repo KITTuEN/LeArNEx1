@@ -1693,6 +1693,20 @@ def fetch_custom_quiz(code):
         if quiz["owner_id"] != owner_id and str(quiz["owner_id"]) != str(owner_id):
             return jsonify({"error": "This quiz is no longer accepting attempts."}), 403
 
+    # Check if user has already attempted this quiz
+    try:
+        user_id = ObjectId(current_user.id)
+    except Exception:
+        user_id = current_user.id
+
+    existing_attempt = custom_quiz_attempts_collection.find_one({
+        "quiz_code": quiz["code"],
+        "user_id": user_id
+    })
+    
+    if existing_attempt:
+        return jsonify({"error": "You have already attempted this quiz. Please ask the creator to reset your attempt if you wish to try again."}), 403
+
     # Return quiz data; include full questions so UI can highlight correct answers
     response = {
         "code": quiz["code"],
