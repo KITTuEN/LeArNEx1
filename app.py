@@ -28,10 +28,17 @@ import logging
 
 # Configure logging
 # Configure logging
+# Configure logging
+handlers = [logging.StreamHandler()]
+try:
+    handlers.append(logging.FileHandler('otp_debug.log'))
+except OSError:
+    pass  # Read-only file system (e.g., Vercel)
+
 logging.basicConfig(
-    filename='otp_debug.log',
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=handlers
 )
 
 # Try to import reportlab for PDF generation
@@ -75,7 +82,7 @@ EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
 SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
 EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp-relay.brevo.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
+SMTP_PORT = int(os.environ.get("SMTP_PORT", 2525))
 # MongoDB connection
 MONGODB_URI = "mongodb+srv://harikothapalli61_db_user:Kothapalli555@cluster0.5nukjmu.mongodb.net/"
 DB_NAME = os.environ.get("DB_NAME", "videoquiz_db")
@@ -347,7 +354,7 @@ def _send_otp_email_thread(recipient_email, otp, purpose="signup"):
         text = msg.as_string()
         
         # Brevo uses port 587 with STARTTLS, but sometimes 2525 works better in cloud envs
-        ports_to_try = [SMTP_PORT, 2525]
+        ports_to_try = [SMTP_PORT, 587]
         
         for port in ports_to_try:
             try:
@@ -383,13 +390,11 @@ def _send_otp_email_thread(recipient_email, otp, purpose="signup"):
         return False
 
 def send_otp_email(recipient_email, otp, purpose="signup"):
-    """Send OTP email asynchronously to prevent blocking."""
-    # Start email sending in a background thread
+    """Send OTP email synchronously (required for Vercel/Serverless)."""
+    # In serverless environments like Vercel, background threads are killed
+    # when the main request finishes. We must send synchronously.
     logging.info(f"Queueing email to {recipient_email}")
-    thread = threading.Thread(target=_send_otp_email_thread, args=(recipient_email, otp, purpose))
-    thread.daemon = True  # Daemon thread will shut down when main program exits
-    thread.start()
-    return True  # Always return True immediately to avoid blocking
+    return _send_otp_email_thread(recipient_email, otp, purpose)
 
 
 def generate_quiz_code(length=6):
@@ -1031,10 +1036,12 @@ def signup():
         }
         
         # Send OTP
-        send_otp_email(email, otp, purpose="signup")
-        
-        flash("OTP sent to your email. Please verify to complete signup.", "info")
-        return redirect(url_for('verify_signup'))
+        if send_otp_email(email, otp, purpose="signup"):
+            flash("OTP sent to your email. Please verify to complete signup.", "info")
+            return redirect(url_for('verify_signup'))
+        else:
+            flash("Failed to send OTP email. Please try again later.", "error")
+            return render_template("signup.html")
     
     return render_template("signup.html")
 
@@ -1194,10 +1201,12 @@ def forgot_password():
         }
         
         # Send OTP
-        send_otp_email(email, otp, purpose="reset")
-        
-        flash("OTP sent to your email. Please verify to reset password.", "info")
-        return redirect(url_for('verify_reset_otp'))
+        if send_otp_email(email, otp, purpose="reset"):
+            flash("OTP sent to your email. Please verify to reset password.", "info")
+            return redirect(url_for('verify_reset_otp'))
+        else:
+            flash("Failed to send OTP email. Please try again later.", "error")
+            return render_template("forgot_password.html")
     
     return render_template("forgot_password.html")
 
