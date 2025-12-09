@@ -62,10 +62,11 @@ except ImportError:
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "your-secret-key-change-this-in-production")
 
-EMAIL_ADDRESS = "kittech6@gmail.com"
-EMAIL_PASSWORD = "sfrl scjz vemj idfw"  # Gmail app password
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 465
+EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
+SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
+SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp-relay.brevo.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 
 # MongoDB connection
 MONGODB_URI = "mongodb+srv://harikothapalli61_db_user:Kothapalli555@cluster0.5nukjmu.mongodb.net/"
@@ -336,31 +337,23 @@ def _send_otp_email_thread(recipient_email, otp, purpose="signup"):
         msg.attach(MIMEText(body, 'html'))
         text = msg.as_string()
         
-        # Attempt 1: Try SMTP_SSL on port 465 (Preferred for deployment)
+        msg.attach(MIMEText(body, 'html'))
+        text = msg.as_string()
+        
+        # Brevo uses port 587 with STARTTLS
         try:
-            print(f"Attempting to send email via SMTP_SSL (Port 465)...")
-            server = smtplib.SMTP_SSL(SMTP_SERVER, 465, timeout=10)
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            print(f"Attempting to send email via STARTTLS (Port 587)...")
+            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
+            server.starttls()
+            server.login(SMTP_USERNAME, EMAIL_PASSWORD)
+            # The 'From' address in the envelope must match the authenticated user or be a verified sender
             server.sendmail(EMAIL_ADDRESS, recipient_email, text)
             server.quit()
-            print(f"Email sent successfully to {recipient_email} via Port 465")
+            print(f"Email sent successfully to {recipient_email} via Port 587")
             return True
-        except Exception as e1:
-            print(f"Failed to send via Port 465: {str(e1)}")
-            
-            # Attempt 2: Fallback to STARTTLS on port 587 (Preferred for localhost/some networks)
-            try:
-                print(f"Attempting fallback to STARTTLS (Port 587)...")
-                server = smtplib.SMTP(SMTP_SERVER, 587, timeout=10)
-                server.starttls()
-                server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-                server.sendmail(EMAIL_ADDRESS, recipient_email, text)
-                server.quit()
-                print(f"Email sent successfully to {recipient_email} via Port 587")
-                return True
-            except Exception as e2:
-                print(f"Failed to send via Port 587: {str(e2)}")
-                return False
+        except Exception as e:
+            print(f"Failed to send email: {str(e)}")
+            return False
     except Exception as e:
         print(f"Error preparing email: {str(e)}")
         return False
@@ -939,11 +932,11 @@ def login():
             flash("Please fill in all fields.", "error")
             return render_template("login.html")
         
-        # Find user by username or email
+        # Find user by username or email (case-insensitive for email)
         user_data = users_collection.find_one({
             "$or": [
                 {"username": username},
-                {"email": username}
+                {"email": {"$regex": f"^{re.escape(username)}$", "$options": "i"}}
             ]
         })
         
@@ -999,21 +992,55 @@ def signup():
                 flash("Email already registered.", "error")
             return render_template("signup.html")
         
-        # Create new user directly (OTP removed)
+        # Generate OTP and store in session
+        otp = generate_otp()
         hashed_password = generate_password_hash(password)
-        user_data = {
+        
+        session['signup_data'] = {
             "username": username,
             "email": email,
             "password": hashed_password,
-            "created_at": datetime.utcnow()
+            "otp": otp,
+            "timestamp": datetime.utcnow().isoformat()
         }
         
-        users_collection.insert_one(user_data)
+        # Send OTP
+        send_otp_email(email, otp, purpose="signup")
         
-        flash("Account created successfully! Please log in.", "success")
-        return redirect(url_for('login'))
+        flash("OTP sent to your email. Please verify to complete signup.", "info")
+        return redirect(url_for('verify_signup'))
     
     return render_template("signup.html")
+
+@app.route("/verify-signup", methods=["GET", "POST"])
+def verify_signup():
+    if "signup_data" not in session:
+        flash("Session expired. Please sign up again.", "error")
+        return redirect(url_for('signup'))
+    
+    if request.method == "POST":
+        entered_otp = request.form.get("otp", "").strip()
+        signup_data = session.get("signup_data")
+        
+        if entered_otp == signup_data.get("otp"):
+            # Create user
+            user_data = {
+                "username": signup_data["username"],
+                "email": signup_data["email"],
+                "password": signup_data["password"],
+                "created_at": datetime.utcnow()
+            }
+            users_collection.insert_one(user_data)
+            
+            # Clear session
+            session.pop("signup_data", None)
+            
+            flash("Account created successfully! Please log in.", "success")
+            return redirect(url_for('login'))
+        else:
+            flash("Invalid OTP. Please try again.", "error")
+            
+    return render_template("verify_signup.html")
 
 @app.route("/logout")
 @login_required
@@ -1130,13 +1157,45 @@ def forgot_password():
             flash("If an account exists with this email, you can reset your password.", "info")
             return render_template("forgot_password.html")
         
-        # Store email in session for reset
-        session["reset_email"] = email
+        # Generate OTP
+        otp = generate_otp()
         
-        # Direct redirect to reset password (OTP removed)
-        return redirect(url_for('reset_password'))
+        # Store email and OTP in session
+        session["reset_data"] = {
+            "email": email,
+            "otp": otp,
+            "verified": False
+        }
+        
+        # Send OTP
+        send_otp_email(email, otp, purpose="reset")
+        
+        flash("OTP sent to your email. Please verify to reset password.", "info")
+        return redirect(url_for('verify_reset_otp'))
     
     return render_template("forgot_password.html")
+
+@app.route("/verify-reset-otp", methods=["GET", "POST"])
+def verify_reset_otp():
+    if "reset_data" not in session:
+        flash("Session expired. Please request password reset again.", "error")
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == "POST":
+        entered_otp = request.form.get("otp", "").strip()
+        reset_data = session.get("reset_data")
+        
+        if entered_otp == reset_data.get("otp"):
+            # Mark as verified
+            reset_data["verified"] = True
+            session["reset_data"] = reset_data
+            
+            flash("OTP verified. Please set your new password.", "success")
+            return redirect(url_for('reset_password'))
+        else:
+            flash("Invalid OTP. Please try again.", "error")
+            
+    return render_template("verify_reset_otp.html")
 
 @app.route("/reset-password", methods=["GET", "POST"])
 def reset_password():
@@ -1145,14 +1204,15 @@ def reset_password():
         return redirect(url_for('home'))
     
     # Check if user has requested password reset
-    if "reset_email" not in session:
-        flash("Please request a password reset first.", "error")
+    # Check if user has requested password reset and verified OTP
+    if "reset_data" not in session or not session["reset_data"].get("verified"):
+        flash("Please verify OTP first.", "error")
         return redirect(url_for('forgot_password'))
     
     if request.method == "POST":
         new_password = request.form.get("new_password", "")
         confirm_password = request.form.get("confirm_password", "")
-        email = session.get("reset_email")
+        email = session["reset_data"]["email"]
         
         if not new_password or not confirm_password:
             flash("Please fill in all fields.", "error")
@@ -1175,7 +1235,8 @@ def reset_password():
         )
         
         # Clear session
-        session.pop("reset_email", None)
+        # Clear session
+        session.pop("reset_data", None)
         
         flash("Password has been reset successfully! Please login with your new password.", "success")
         return redirect(url_for('login'))
