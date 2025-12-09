@@ -67,7 +67,6 @@ SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
 EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp-relay.brevo.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
-
 # MongoDB connection
 MONGODB_URI = "mongodb+srv://harikothapalli61_db_user:Kothapalli555@cluster0.5nukjmu.mongodb.net/"
 DB_NAME = os.environ.get("DB_NAME", "videoquiz_db")
