@@ -1902,24 +1902,6 @@ def toggle_custom_quiz_active(code):
 
     if quiz["owner_id"] != owner_id and str(quiz["owner_id"]) != str(owner_id):
         return jsonify({"error": "Not authorized to modify this quiz"}), 403
-
-    new_active = not quiz.get("active", True)
-    custom_quizzes_collection.update_one({"_id": quiz["_id"]}, {"$set": {"active": new_active}})
-    return jsonify({"active": new_active})
-
-@app.route("/chat")
-@login_required
-def chat_main():
-    return render_template("index.html")
-
-@app.route("/videoquiz")
-@login_required
-def videoquiz():
-    return render_template("videoquiz.html")
-
-@app.route("/api/chat", methods=["POST"])
-@login_required
-def chat():
     data = request.get_json()
     user_message = data.get("message", "")
     if not user_message:
@@ -3252,6 +3234,89 @@ def generate_questions():
         return jsonify({"count": count})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/chat")
+@login_required
+def chat_main():
+    return render_template("index.html")
+
+@app.route("/videoquiz")
+@login_required
+def videoquiz():
+    return render_template("videoquiz.html")
+
+@app.route("/api/chat", methods=["POST"])
+@login_required
+def chat():
+    data = request.get_json()
+    user_message = data.get("message", "")
+    if not user_message:
+        return jsonify({"error": "No message provided"}), 400
+    try:
+        answer = ask_gemini(user_message)
+        
+        # Store conversation in MongoDB
+        if MONGODB_AVAILABLE:
+            try:
+                # Store user_id as ObjectId for consistency
+                try:
+                    user_id_obj = ObjectId(current_user.id)
+                except:
+                    user_id_obj = current_user.id
+                
+                conversation = {
+                    "user_id": user_id_obj,
+                    "username": current_user.username,
+                    "user_message": user_message,
+                    "bot_response": answer,
+                    "timestamp": datetime.utcnow()
+                }
+                chat_conversations_collection.insert_one(conversation)
+            except Exception as e:
+                print(f"Error storing conversation: {str(e)}")
+        
+        return jsonify({"response": answer})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/sitemap.xml")
+def sitemap():
+    """Generate sitemap.xml for SEO."""
+    host = request.host_url.rstrip('/')
+    pages = [
+        {"loc": f"{host}/", "changefreq": "daily", "priority": "1.0"},
+        {"loc": f"{host}/login", "changefreq": "monthly", "priority": "0.8"},
+        {"loc": f"{host}/signup", "changefreq": "monthly", "priority": "0.8"},
+        {"loc": f"{host}/about", "changefreq": "monthly", "priority": "0.5"},
+    ]
+    
+    sitemap_xml = ['<?xml version="1.0" encoding="UTF-8"?>']
+    sitemap_xml.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+    
+    for page in pages:
+        sitemap_xml.append('  <url>')
+        sitemap_xml.append(f'    <loc>{page["loc"]}</loc>')
+        sitemap_xml.append(f'    <changefreq>{page["changefreq"]}</changefreq>')
+        sitemap_xml.append(f'    <priority>{page["priority"]}</priority>')
+        sitemap_xml.append('  </url>')
+        
+    sitemap_xml.append('</urlset>')
+    
+    from flask import Response
+    return Response('\n'.join(sitemap_xml), mimetype='application/xml')
+
+@app.route("/robots.txt")
+def robots():
+    """Serve robots.txt for SEO."""
+    host = request.host_url.rstrip('/')
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        f"Sitemap: {host}/sitemap.xml"
+    ]
+    from flask import Response
+    return Response('\n'.join(lines), mimetype='text/plain')
+
 
 
 if __name__ == "__main__":
