@@ -28,13 +28,16 @@ import logging
 
 # Configure logging
 # Configure logging
+handlers = [logging.StreamHandler()]
+try:
+    handlers.append(logging.FileHandler('otp_debug.log'))
+except OSError:
+    pass  # Read-only file system (e.g., Vercel)
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),  # Log to console (important for Vercel)
-        logging.FileHandler('otp_debug.log')  # Keep file logging for local dev
-    ]
+    handlers=handlers
 )
 
 # Try to import reportlab for PDF generation
