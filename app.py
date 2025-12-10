@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, flash, session
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, flash, session, has_request_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 import google.generativeai as genai
 import os
@@ -86,6 +86,19 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", 2525))
 # MongoDB connection
 MONGODB_URI = "mongodb+srv://harikothapalli61_db_user:Kothapalli555@cluster0.5nukjmu.mongodb.net/"
 DB_NAME = os.environ.get("DB_NAME", "videoquiz_db")
+
+# Initialize collections to None to avoid NameError if connection fails
+users_collection = None
+quizzes_collection = None
+quiz_scores_collection = None
+chat_conversations_collection = None
+user_quiz_history_collection = None
+custom_quizzes_collection = None
+custom_quiz_attempts_collection = None
+aptitude_questions_collection = None
+aptitude_attempts_collection = None
+aptitude_practice_history_collection = None
+
 try:
     if not MONGODB_URI:
         raise ValueError("MONGODB_URI environment variable not set")
@@ -117,11 +130,12 @@ login_manager.login_message = 'Please log in to access this page.'
 
 # User class for Flask-Login
 class User(UserMixin):
-    def __init__(self, user_id, username, email, dsa_score=0):
+    def __init__(self, user_id, username, email, dsa_score=0, api_key=None):
         self.id = str(user_id)
         self.username = username
         self.email = email
         self.dsa_score = dsa_score
+        self.api_key = api_key
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -134,7 +148,8 @@ def load_user(user_id):
                 user_data["_id"], 
                 user_data["username"], 
                 user_data["email"],
-                user_data.get("dsa_score", 0)
+                user_data.get("dsa_score", 0),
+                user_data.get("api_key")
             )
     except Exception as e:
         print(f"Error loading user: {str(e)}")
@@ -152,13 +167,17 @@ def get_gemini_model():
     """
     api_key = None
     
-    # Try to get a random key from the list first
-    if GEMINI_API_KEYS:
+    # 1. Check if current user has a custom API key
+    if has_request_context() and current_user.is_authenticated and current_user.api_key:
+        api_key = current_user.api_key
+
+    # 2. Try to get a random key from the list first (if no user key)
+    if not api_key and GEMINI_API_KEYS:
         keys = [k.strip() for k in GEMINI_API_KEYS.split(',') if k.strip()]
         if keys:
             api_key = random.choice(keys)
             
-    # Fallback to single key if no list or list is empty
+    # 3. Fallback to single key if no list or list is empty
     if not api_key and GEMINI_API_KEY:
         api_key = GEMINI_API_KEY
         
@@ -1183,6 +1202,10 @@ def forgot_password():
             return render_template("forgot_password.html")
         
         # Check if user exists
+        if not MONGODB_AVAILABLE or users_collection is None:
+            flash("Database unavailable. Cannot reset password.", "error")
+            return render_template("forgot_password.html")
+
         user_data = users_collection.find_one({"email": email})
         
         if not user_data:
@@ -1277,6 +1300,28 @@ def reset_password():
         return redirect(url_for('login'))
     
     return render_template("reset_password.html")
+
+@app.route("/update_api_key", methods=["POST"])
+@login_required
+def update_api_key():
+    if not MONGODB_AVAILABLE:
+        flash("Database unavailable.", "error")
+        return redirect(url_for('dashboard'))
+        
+    api_key = request.form.get("api_key", "").strip()
+    
+    try:
+        # Update user in database
+        users_collection.update_one(
+            {"_id": ObjectId(current_user.id)},
+            {"$set": {"api_key": api_key}}
+        )
+        flash("API Key updated successfully.", "success")
+    except Exception as e:
+        print(f"Error updating API key: {str(e)}")
+        flash("Failed to update API key.", "error")
+        
+    return redirect(url_for('dashboard'))
 
 @app.route("/home")
 @login_required
