@@ -157,7 +157,7 @@ def load_user(user_id):
 
 # Gemini API config
 # Gemini API config
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCeY99Oeu2B_jYCgpp24Y5Z0LsrlTBrqKY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_API_KEYS = os.environ.get("GEMINI_API_KEYS")
 
 def get_gemini_model():

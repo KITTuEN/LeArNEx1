@@ -7,6 +7,7 @@ import certifi
 from datetime import datetime
 from dotenv import load_dotenv
 import time
+import random
 
 # Load environment variables
 load_dotenv()
@@ -14,13 +15,20 @@ load_dotenv()
 # Configuration
 MONGODB_URI = "mongodb+srv://harikothapalli61_db_user:Kothapalli555@cluster0.5nukjmu.mongodb.net/"
 DB_NAME = os.environ.get("DB_NAME", "videoquiz_db")
-GEMINI_API_KEY = "AIzaSyCeY99Oeu2B_jYCgpp24Y5Z0LsrlTBrqKY" # Hardcoded as requested by user input
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_API_KEYS = os.environ.get("GEMINI_API_KEYS")
 
 def get_gemini_model():
-    if not GEMINI_API_KEY:
+    api_key = GEMINI_API_KEY
+    if not api_key and GEMINI_API_KEYS:
+        keys = [k.strip() for k in GEMINI_API_KEYS.split(',') if k.strip()]
+        if keys:
+            api_key = random.choice(keys)
+
+    if not api_key:
         print("Error: GEMINI_API_KEY not found.")
         return None
-    genai.configure(api_key=GEMINI_API_KEY)
+    genai.configure(api_key=api_key)
     return genai.GenerativeModel('gemini-flash-latest')
 
 def clean_json_text(text):
